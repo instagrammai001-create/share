@@ -1,0 +1,2163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
+  <title>Instagram運用AIエージェント 仕組みスライド</title>
+  <style>
+    :root {
+      --bg: #eef3f6;
+      --bg-soft: #f8fbfc;
+      --surface: #ffffff;
+      --surface-strong: #f6f9fb;
+      --surface-warm: #fff8ec;
+      --line: rgba(20, 38, 52, 0.12);
+      --line-strong: rgba(20, 38, 52, 0.22);
+      --text: #182733;
+      --muted: #617483;
+      --ink: #102331;
+      --teal: #0f8a77;
+      --teal-soft: rgba(15, 138, 119, 0.1);
+      --sky: #228fd5;
+      --sky-soft: rgba(34, 143, 213, 0.1);
+      --coral: #e2784e;
+      --coral-soft: rgba(226, 120, 78, 0.1);
+      --gold: #c7961d;
+      --gold-soft: rgba(199, 150, 29, 0.11);
+      --mint: #0f8a77;
+      --shadow: 0 22px 54px rgba(21, 37, 49, 0.12);
+      --radius-xl: 34px;
+      --radius-lg: 26px;
+      --radius-md: 18px;
+      --radius-sm: 14px;
+      --max-width: 1360px;
+      --transition: 420ms cubic-bezier(.2, .9, .2, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-snap-type: y mandatory;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: "Avenir Next", "Hiragino Sans", "Yu Gothic", sans-serif;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(34, 143, 213, 0.12), transparent 20%),
+        radial-gradient(circle at 82% 14%, rgba(15, 138, 119, 0.1), transparent 22%),
+        radial-gradient(circle at 50% 84%, rgba(226, 120, 78, 0.08), transparent 18%),
+        linear-gradient(180deg, #f6f9fb 0%, #eef3f6 100%);
+      overflow-x: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: auto;
+      width: 34vw;
+      height: 34vw;
+      border-radius: 50%;
+      filter: blur(70px);
+      opacity: 0.32;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::before {
+      top: -10vw;
+      right: -8vw;
+      background: rgba(34, 143, 213, 0.08);
+      animation: drift 16s ease-in-out infinite alternate;
+    }
+
+    body::after {
+      bottom: -12vw;
+      left: -10vw;
+      background: rgba(226, 120, 78, 0.07);
+      animation: drift 20s ease-in-out infinite alternate-reverse;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    .rail {
+      position: fixed;
+      top: 50%;
+      right: 14px;
+      transform: translateY(-50%);
+      z-index: 30;
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid rgba(20, 38, 52, 0.1);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 18px 38px rgba(0, 0, 0, 0.16);
+    }
+
+    .rail button {
+      width: 10px;
+      height: 10px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(24, 39, 51, 0.18);
+      cursor: pointer;
+      transition: transform var(--transition), background var(--transition), box-shadow var(--transition);
+    }
+
+    .rail button:hover,
+    .rail button:focus-visible {
+      transform: scale(1.18);
+      background: rgba(24, 39, 51, 0.42);
+      outline: none;
+    }
+
+    .rail button.is-active {
+      background: var(--gold);
+      box-shadow: 0 0 0 5px rgba(244, 197, 101, 0.18);
+    }
+
+    .page-indicator {
+      position: fixed;
+      top: 18px;
+      right: 20px;
+      z-index: 30;
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 13px;
+      border: 1px solid rgba(20, 38, 52, 0.1);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(16px);
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.14);
+    }
+
+    .page-indicator strong {
+      color: var(--text);
+      font-size: 1rem;
+    }
+
+    .deck {
+      position: relative;
+      z-index: 1;
+    }
+
+    .slide {
+      scroll-snap-align: start;
+      min-height: 100svh;
+      height: 100svh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 28px 36px;
+      background: linear-gradient(180deg, #111111 0%, #060606 100%);
+      overflow: hidden;
+    }
+
+    .slide-inner {
+      width: min(var(--max-width), calc(100vw - 72px), calc((100svh - 78px) * 1.66));
+      height: min(850px, calc(100svh - 78px), calc((100vw - 72px) / 1.66));
+      margin: 0 auto;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.02fr) minmax(360px, 0.98fr);
+      gap: 18px;
+      align-items: stretch;
+      border-radius: 38px;
+      border: 1px solid rgba(24, 39, 51, 0.08);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(246, 249, 251, 0.98)),
+        rgba(255, 255, 255, 0.96);
+      box-shadow:
+        0 24px 70px rgba(0, 0, 0, 0.28),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+      overflow: hidden;
+    }
+
+    .slide-card {
+      position: relative;
+      overflow: hidden;
+      height: 100%;
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, #ffffff, #f7fafc);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .copy-panel {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 28px 28px 24px;
+      overflow: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(24, 39, 51, 0.22) transparent;
+      transform: translateY(18px);
+      opacity: 0;
+      transition: transform 640ms cubic-bezier(.2, .8, .2, 1), opacity 640ms ease;
+    }
+
+    .visual-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: 100%;
+      padding: 16px;
+      min-height: 0;
+      transform: translateY(18px);
+      opacity: 0;
+      transition: transform 760ms cubic-bezier(.2, .8, .2, 1), opacity 760ms ease;
+    }
+
+    .slide.is-active .copy-panel,
+    .slide.is-active .visual-panel {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      color: var(--mint);
+      font-size: 0.76rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 28px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--mint));
+    }
+
+    h1,
+    h2 {
+      letter-spacing: -0.04em;
+      line-height: 1.06;
+    }
+
+    h1 {
+      font-size: clamp(2.5rem, 4.2vw, 4.6rem);
+      max-width: 8em;
+    }
+
+    h2 {
+      font-size: clamp(2rem, 3.2vw, 3.2rem);
+      max-width: 9em;
+    }
+
+    .lead {
+      max-width: 38rem;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: clamp(0.96rem, 1.05vw, 1.06rem);
+      line-height: 1.72;
+    }
+
+    .strap {
+      display: inline-flex;
+      align-items: center;
+      margin-top: 18px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(90deg, rgba(15, 138, 119, 0.1), rgba(34, 143, 213, 0.08));
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    .tag-row,
+    .mini-grid,
+    .summary-grid,
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .tag-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 18px;
+    }
+
+    .tag {
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+    }
+
+    .tag strong,
+    .mini-card strong,
+    .role-block strong,
+    .day-card strong,
+    .fact-pill strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.98rem;
+      color: var(--text);
+    }
+
+    .tag p,
+    .mini-card p,
+    .role-block p,
+    .day-card p,
+    .slide-note,
+    .fact-pill p,
+    .flow-legend span {
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.62;
+    }
+
+    .mini-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 18px;
+    }
+
+    .mini-card {
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+    }
+
+    .slide-note {
+      margin-top: 18px;
+    }
+
+    .summary-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 18px;
+    }
+
+    .role-block {
+      padding: 16px;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+      min-height: 0;
+    }
+
+    .role-block.user { background: linear-gradient(180deg, rgba(34, 143, 213, 0.11), rgba(34, 143, 213, 0.03)); }
+    .role-block.ai { background: linear-gradient(180deg, rgba(15, 138, 119, 0.11), rgba(15, 138, 119, 0.03)); }
+    .role-block.system { background: linear-gradient(180deg, rgba(226, 120, 78, 0.11), rgba(226, 120, 78, 0.03)); }
+
+    .flow-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .flow-legend .pill,
+    .fact-pill {
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(20, 38, 52, 0.04);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    .dot.user { background: var(--sky); }
+    .dot.ai { background: var(--teal); }
+    .dot.notion { background: var(--gold); }
+    .dot.system { background: var(--coral); }
+    .dot.instagram { background: #ffb1d6; }
+
+    .artboard {
+      flex: 1 1 auto;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      border-radius: 28px;
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(34, 143, 213, 0.04), transparent),
+        #fbfdff;
+      overflow: hidden;
+    }
+
+    .artboard svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .node {
+      rx: 26;
+      ry: 26;
+      stroke-width: 2.2;
+      vector-effect: non-scaling-stroke;
+      filter: drop-shadow(0 8px 16px rgba(20, 38, 52, 0.08));
+    }
+
+    .node-text {
+      fill: var(--text);
+      font-size: 20px;
+      font-weight: 800;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      letter-spacing: -0.03em;
+    }
+
+    .node-note {
+      fill: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    .node.user { fill: rgba(34, 143, 213, 0.1); stroke: rgba(34, 143, 213, 0.42); }
+    .node.ai { fill: rgba(15, 138, 119, 0.1); stroke: rgba(15, 138, 119, 0.46); }
+    .node.notion { fill: rgba(199, 150, 29, 0.1); stroke: rgba(199, 150, 29, 0.46); }
+    .node.system { fill: rgba(226, 120, 78, 0.1); stroke: rgba(226, 120, 78, 0.46); }
+    .node.instagram { fill: rgba(228, 103, 154, 0.08); stroke: rgba(228, 103, 154, 0.4); }
+    .node.chatwork { fill: rgba(34, 143, 213, 0.08); stroke: rgba(34, 143, 213, 0.38); }
+
+    .label-chip {
+      fill: rgba(255, 255, 255, 0.88);
+      stroke: rgba(20, 38, 52, 0.08);
+      stroke-width: 1;
+      rx: 12;
+      ry: 12;
+    }
+
+    .chip-text {
+      fill: var(--muted);
+      font-size: 11.5px;
+      font-weight: 800;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      letter-spacing: 0.04em;
+    }
+
+    .route-track {
+      fill: none;
+      stroke-width: 4.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.34;
+      vector-effect: non-scaling-stroke;
+    }
+
+    .route-track.sky { stroke: rgba(104, 198, 255, 0.34); }
+    .route-track.teal { stroke: rgba(69, 210, 177, 0.34); }
+    .route-track.coral { stroke: rgba(255, 143, 107, 0.34); }
+    .route-track.gold { stroke: rgba(244, 197, 101, 0.34); }
+
+    .route-track.subtle {
+      stroke-width: 3.4;
+      opacity: 0.24;
+    }
+
+    .route {
+      fill: none;
+      stroke-width: 3.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.94;
+      vector-effect: non-scaling-stroke;
+      stroke-dasharray: 18 8;
+      animation: routeMove 8.4s linear infinite;
+    }
+
+    .route.sky {
+      stroke: rgba(104, 198, 255, 0.78);
+      animation-duration: 7.4s;
+      animation-delay: -1.4s;
+    }
+    .route.teal {
+      stroke: rgba(69, 210, 177, 0.78);
+      animation-duration: 6.7s;
+      animation-delay: -3.2s;
+    }
+    .route.coral {
+      stroke: rgba(255, 143, 107, 0.78);
+      animation-duration: 8.2s;
+      animation-delay: -4.1s;
+    }
+    .route.gold {
+      stroke: rgba(244, 197, 101, 0.78);
+      animation-duration: 5.9s;
+      animation-delay: -2.2s;
+    }
+
+    .route.subtle {
+      stroke-width: 2.6;
+      opacity: 0.64;
+      stroke-dasharray: 12 12;
+      animation-duration: 10.8s;
+    }
+
+    .grid-lines line {
+      stroke: rgba(20, 38, 52, 0.06);
+      stroke-width: 1;
+    }
+
+    .caption-box {
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+    }
+
+    .caption-box strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .caption-box p {
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    .day-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .day-card {
+      padding: 14px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+    }
+
+    .day-card b {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      margin-bottom: 12px;
+      border-radius: 50%;
+      background: rgba(20, 38, 52, 0.06);
+      color: var(--gold);
+      font-size: 0.95rem;
+    }
+
+    .slide-footer {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .summary-pill {
+      padding: 10px 12px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: var(--surface-strong);
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    #slide-3 .summary-grid {
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    #slide-3 .role-block {
+      padding: 13px 14px;
+    }
+
+    #slide-3 .role-block strong {
+      margin-bottom: 4px;
+      font-size: 0.94rem;
+    }
+
+    #slide-3 .role-block p {
+      font-size: 0.86rem;
+      line-height: 1.46;
+    }
+
+    #slide-3 .caption-box {
+      margin-top: 14px !important;
+      padding: 12px 14px;
+    }
+
+    #slide-3 .caption-box p {
+      font-size: 0.88rem;
+      line-height: 1.46;
+    }
+
+    #slide-2 .summary-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    #slide-2 .role-block {
+      padding: 13px 14px;
+    }
+
+    #slide-2 .role-block strong {
+      margin-bottom: 4px;
+      font-size: 0.94rem;
+    }
+
+    #slide-2 .role-block p {
+      font-size: 0.86rem;
+      line-height: 1.46;
+    }
+
+    .lane-divider {
+      stroke: rgba(20, 38, 52, 0.14);
+      stroke-width: 1.2;
+      stroke-dasharray: 6 6;
+    }
+
+    .lane-base {
+      stroke: rgba(20, 38, 52, 0.12);
+      stroke-width: 1.2;
+    }
+
+    .lane-heading {
+      fill: var(--muted);
+      font-size: 15px;
+      font-weight: 900;
+      text-anchor: middle;
+      letter-spacing: 0.1em;
+    }
+
+    .lane-card {
+      rx: 18;
+      ry: 18;
+      stroke-width: 2;
+    }
+
+    .lane-card.user { fill: rgba(97, 116, 131, 0.06); stroke: rgba(97, 116, 131, 0.34); }
+    .lane-card.chatwork { fill: rgba(34, 143, 213, 0.08); stroke: rgba(34, 143, 213, 0.34); }
+    .lane-card.ai { fill: rgba(15, 138, 119, 0.08); stroke: rgba(15, 138, 119, 0.34); }
+    .lane-card.notion { fill: rgba(199, 150, 29, 0.08); stroke: rgba(199, 150, 29, 0.34); }
+    .lane-card.instagram { fill: rgba(228, 103, 154, 0.08); stroke: rgba(228, 103, 154, 0.32); }
+
+    .lane-card-text {
+      fill: var(--text);
+      font-size: 12.6px;
+      font-weight: 800;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+
+    .lane-card-text.sm {
+      font-size: 11.8px;
+    }
+
+    #slide-1 .lead {
+      font-size: 0.92rem;
+      line-height: 1.58;
+    }
+
+    #slide-1 .strap {
+      margin-top: 14px;
+    }
+
+    #slide-1 .tag-row {
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    #slide-1 .tag {
+      padding: 12px 14px;
+    }
+
+    #slide-1 .tag strong {
+      margin-bottom: 4px;
+      font-size: 0.94rem;
+    }
+
+    #slide-1 .tag p {
+      font-size: 0.85rem;
+      line-height: 1.42;
+    }
+
+    #slide-1 .caption-box {
+      margin-top: 14px !important;
+      padding: 12px 14px;
+    }
+
+    #slide-1 .caption-box p {
+      font-size: 0.86rem;
+      line-height: 1.46;
+    }
+
+    #slide-6 .mini-grid {
+      gap: 8px;
+      margin-top: 14px !important;
+    }
+
+    #slide-6 .mini-card {
+      padding: 11px 12px;
+    }
+
+    #slide-6 .mini-card strong {
+      margin-bottom: 4px;
+      font-size: 0.92rem;
+    }
+
+    #slide-6 .mini-card p {
+      font-size: 0.8rem;
+      line-height: 1.36;
+    }
+
+    #slide-6 .caption-box {
+      margin-top: 12px !important;
+      padding: 12px 13px;
+    }
+
+    #slide-6 .caption-box p {
+      font-size: 0.82rem;
+      line-height: 1.38;
+    }
+
+    #slide-6 .lead {
+      font-size: 0.9rem;
+      line-height: 1.56;
+    }
+
+    #slide-11 .summary-grid {
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    #slide-11 .role-block {
+      padding: 12px 13px;
+    }
+
+    #slide-11 .role-block strong {
+      margin-bottom: 4px;
+      font-size: 0.92rem;
+    }
+
+    #slide-11 .role-block p {
+      font-size: 0.82rem;
+      line-height: 1.38;
+    }
+
+    #slide-11 .caption-box {
+      margin-top: 12px !important;
+      padding: 12px 14px;
+    }
+
+    #slide-11 .caption-box p {
+      font-size: 0.86rem;
+      line-height: 1.42;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @keyframes drift {
+      from { transform: translate3d(0, 0, 0) scale(1); }
+      to { transform: translate3d(-2vw, 2vw, 0) scale(1.08); }
+    }
+
+    @keyframes routeMove {
+      from { stroke-dashoffset: 0; }
+      to { stroke-dashoffset: -56; }
+    }
+
+    @media (max-height: 840px) and (min-width: 1161px) {
+      .slide {
+        padding: 24px 24px 30px;
+      }
+
+      .slide-inner {
+        width: min(var(--max-width), calc(100vw - 60px), calc((100svh - 62px) * 1.72));
+        height: min(820px, calc(100svh - 62px), calc((100vw - 60px) / 1.72));
+        padding: 12px;
+        gap: 14px;
+      }
+
+      .copy-panel {
+        padding: 22px 24px 20px;
+      }
+
+      .visual-panel {
+        padding: 14px;
+      }
+
+      .eyebrow {
+        margin-bottom: 12px;
+        font-size: 0.74rem;
+      }
+
+      h1 {
+        font-size: clamp(2.1rem, 3.8vw, 3.7rem);
+      }
+
+      h2 {
+        font-size: clamp(1.7rem, 2.7vw, 2.6rem);
+      }
+
+      .lead {
+        margin-top: 10px;
+        font-size: 0.9rem;
+        line-height: 1.54;
+      }
+
+      .strap {
+        margin-top: 12px;
+        padding: 8px 12px;
+        font-size: 0.9rem;
+      }
+
+      .tag-row,
+      .mini-grid,
+      .summary-grid,
+      .stack,
+      .day-grid {
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .tag,
+      .mini-card,
+      .caption-box,
+      .day-card,
+      .role-block {
+        padding: 11px 12px;
+      }
+
+      .tag strong,
+      .mini-card strong,
+      .role-block strong,
+      .day-card strong,
+      .fact-pill strong {
+        margin-bottom: 4px;
+        font-size: 0.9rem;
+      }
+
+      .tag p,
+      .mini-card p,
+      .role-block p,
+      .day-card p,
+      .slide-note,
+      .fact-pill p,
+      .flow-legend span {
+        font-size: 0.84rem;
+        line-height: 1.42;
+      }
+
+      .slide-note,
+      .slide-footer {
+        margin-top: 12px;
+      }
+
+      .summary-pill {
+        padding: 8px 10px;
+        font-size: 0.8rem;
+      }
+
+      .flow-legend {
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .flow-legend .pill,
+      .fact-pill {
+        padding: 8px 10px;
+      }
+
+      .caption-box p {
+        font-size: 0.84rem;
+        line-height: 1.42;
+      }
+
+      #slide-3 .summary-grid {
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      #slide-3 .role-block {
+        padding: 10px 11px;
+      }
+
+      #slide-3 .role-block p {
+        font-size: 0.78rem;
+        line-height: 1.28;
+      }
+
+      #slide-3 .caption-box {
+        margin-top: 8px !important;
+        padding: 10px 11px;
+      }
+
+      #slide-3 .caption-box p {
+        font-size: 0.8rem;
+        line-height: 1.34;
+      }
+
+      #slide-2 .summary-grid {
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      #slide-2 .role-block {
+        padding: 10px 11px;
+      }
+
+      #slide-2 .role-block p {
+        font-size: 0.78rem;
+        line-height: 1.3;
+      }
+
+      #slide-6 h2 {
+        font-size: clamp(1.55rem, 2.45vw, 2.3rem);
+      }
+
+      #slide-6 .lead {
+        font-size: 0.84rem;
+        line-height: 1.42;
+      }
+
+      #slide-6 .mini-grid {
+        gap: 6px;
+        margin-top: 12px !important;
+      }
+
+      #slide-6 .mini-card {
+        padding: 10px 11px;
+      }
+
+      #slide-6 .mini-card strong {
+        font-size: 0.86rem;
+      }
+
+      #slide-6 .mini-card p {
+        font-size: 0.76rem;
+        line-height: 1.28;
+      }
+
+      #slide-6 .caption-box {
+        margin-top: 10px !important;
+        padding: 10px 11px;
+      }
+
+      #slide-6 .caption-box p {
+        font-size: 0.78rem;
+        line-height: 1.3;
+      }
+
+      #slide-1 h1 {
+        font-size: clamp(1.95rem, 3.2vw, 3.15rem);
+      }
+
+      #slide-1 .lead {
+        font-size: 0.84rem;
+        line-height: 1.44;
+      }
+
+      #slide-1 .tag-row {
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      #slide-1 .tag {
+        padding: 10px 11px;
+      }
+
+      #slide-1 .tag strong {
+        font-size: 0.88rem;
+      }
+
+      #slide-1 .tag p {
+        font-size: 0.77rem;
+        line-height: 1.3;
+      }
+
+      #slide-1 .caption-box {
+        margin-top: 10px !important;
+        padding: 10px 11px;
+      }
+
+      #slide-1 .caption-box p {
+        font-size: 0.79rem;
+        line-height: 1.34;
+      }
+    }
+
+    @media (max-width: 1160px) {
+      .slide {
+        min-height: auto;
+        height: auto;
+        padding: 18px 14px 24px;
+        overflow: visible;
+      }
+
+      .slide-inner {
+        grid-template-columns: 1fr;
+        width: min(var(--max-width), calc(100vw - 28px));
+        height: auto;
+        padding: 14px;
+      }
+
+      .copy-panel,
+      .visual-panel {
+        min-height: auto;
+        height: auto;
+        padding: 24px 22px;
+        overflow: visible;
+      }
+
+      .visual-panel {
+        order: -1;
+      }
+
+      .summary-grid,
+      .tag-row,
+      .mini-grid,
+      .day-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .artboard,
+      .artboard svg {
+        min-height: 420px;
+      }
+    }
+
+    @media (max-width: 780px) {
+      .rail,
+      .page-indicator {
+        display: none;
+      }
+
+      h1 {
+        font-size: clamp(2.25rem, 10vw, 3.2rem);
+      }
+
+      h2 {
+        font-size: clamp(1.85rem, 8vw, 2.5rem);
+      }
+
+      .copy-panel,
+      .visual-panel {
+        padding: 20px 18px;
+      }
+
+      .artboard,
+      .artboard svg {
+        min-height: 360px;
+      }
+
+      .node-text {
+        font-size: 17px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="rail" aria-label="スライドナビゲーション">
+    <button type="button" data-target="slide-1" aria-label="1枚目"></button>
+    <button type="button" data-target="slide-2" aria-label="2枚目"></button>
+    <button type="button" data-target="slide-3" aria-label="3枚目"></button>
+    <button type="button" data-target="slide-4" aria-label="4枚目"></button>
+    <button type="button" data-target="slide-5" aria-label="5枚目"></button>
+    <button type="button" data-target="slide-6" aria-label="6枚目"></button>
+    <button type="button" data-target="slide-7" aria-label="7枚目"></button>
+    <button type="button" data-target="slide-8" aria-label="8枚目"></button>
+    <button type="button" data-target="slide-9" aria-label="9枚目"></button>
+    <button type="button" data-target="slide-10" aria-label="10枚目"></button>
+    <button type="button" data-target="slide-11" aria-label="11枚目"></button>
+  </nav>
+
+  <div class="page-indicator">
+    <span>ページ</span>
+    <strong id="page-current">01</strong>
+    <span>/ 11</span>
+  </div>
+
+  <main class="deck">
+    <section class="slide" id="slide-1" data-index="01">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">全体俯瞰</div>
+          <h1>Instagram運用AIエージェントの仕組み</h1>
+          <p class="lead">
+            この資料を見れば、<strong>どこが入口か、どこで人が決めるか、AIとSystemが裏側で何を自動化するか</strong>までを、
+            非エンジニアでも全体像から追えるように整理しています。
+          </p>
+          <div class="strap">AIが考える / 人が決める / Notionで管理 / Systemが実行</div>
+
+          <div class="tag-row">
+            <article class="tag">
+              <strong>ユーザーがすること</strong>
+              <p>依頼する、候補を選ぶ、承認する、日時を決める、結果を見て次を決める。</p>
+            </article>
+            <article class="tag">
+              <strong>AIがすること</strong>
+              <p>内容を解釈し、投稿案や返信案を作り、危険度や優先度を判定する。</p>
+            </article>
+            <article class="tag">
+              <strong>Notionの役割</strong>
+              <p>人が最終判断する場所。状態管理、履歴保存、ダッシュボードの母艦。</p>
+            </article>
+            <article class="tag">
+              <strong>システムの役割</strong>
+              <p>InstagramとNotionをつなぎ、承認済みの処理だけを実行し、結果を戻す。</p>
+            </article>
+          </div>
+
+          <div class="caption-box" style="margin-top: 18px;">
+            <strong>この資料で分かること</strong>
+            <p>1枚目は結論、2枚目は役割の分担図です。入口は Chatwork、判断は Notion、案出しと判定は AI、実行と同期は System。つまり、<strong>人は意思決定に集中し、裏側の処理は自動で回す</strong>構造です。</p>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 760 560" role="img" aria-labelledby="hero-title hero-desc">
+              <title id="hero-title">全体俯瞰図</title>
+              <desc id="hero-desc">ユーザー、Chatwork、AI、Notion、Instagramの関係を示す全体俯瞰図</desc>
+              <g class="grid-lines">
+                <line x1="56" y1="160" x2="708" y2="160"></line>
+                <line x1="56" y1="334" x2="708" y2="334"></line>
+                <line x1="134" y1="56" x2="134" y2="500"></line>
+                <line x1="352" y1="56" x2="352" y2="500"></line>
+                <line x1="570" y1="56" x2="570" y2="500"></line>
+              </g>
+
+              <rect class="label-chip" x="116" y="34" width="528" height="34"></rect>
+              <text class="chip-text" x="380" y="51" style="font-size:13.6px;">入口: Chatwork / 案出し: AI / 判断: Notion / 結果: Instagram</text>
+
+              <rect class="label-chip" x="76" y="104" width="98" height="28"></rect>
+              <text class="chip-text" x="125" y="118">人が依頼</text>
+              <line class="lane-divider" x1="125" y1="132" x2="125" y2="176"></line>
+
+              <rect class="label-chip" x="520" y="104" width="116" height="28"></rect>
+              <text class="chip-text" x="578" y="118">人が判断</text>
+              <line class="lane-divider" x1="578" y1="132" x2="578" y2="176"></line>
+
+              <path class="route sky" d="M212 229 H 252"></path>
+              <path class="route teal" d="M452 229 H 492"></path>
+              <path class="route coral" d="M570 282 C 570 320, 586 332, 586 366"></path>
+              <path class="route subtle gold" d="M492 414 C 402 456, 316 432, 320 292"></path>
+
+              <rect class="node chatwork" x="56" y="176" width="156" height="106"></rect>
+              <text class="node-text" x="134" y="216">Chatwork</text>
+              <text class="node-note" x="134" y="244">依頼受付 / 通知</text>
+              <text class="node-note" x="134" y="266">承認依頼の入口</text>
+
+              <rect class="node ai" x="252" y="166" width="200" height="126"></rect>
+              <text class="node-text" x="352" y="210">AI / System</text>
+              <text class="node-note" x="352" y="240">解釈 / 生成 / 判定</text>
+              <text class="node-note" x="352" y="262">承認済みだけ実行</text>
+
+              <rect class="node notion" x="492" y="176" width="156" height="106"></rect>
+              <text class="node-text" x="570" y="216">Notion</text>
+              <text class="node-note" x="570" y="244">承認 / 状態管理</text>
+              <text class="node-note" x="570" y="266">履歴 / ダッシュボード</text>
+
+              <rect class="node instagram" x="492" y="366" width="188" height="96"></rect>
+              <text class="node-text" x="586" y="401">Instagram</text>
+              <text class="node-note" x="586" y="429">投稿 / コメント / 実績</text>
+
+              <rect class="label-chip" x="244" y="344" width="216" height="28"></rect>
+              <text class="chip-text" x="352" y="358">反応は次回改善へ戻る</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-2" data-index="02">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">全体構成</div>
+          <h2>このツールは、5つのレイヤーで分担しています</h2>
+          <p class="lead">
+            ユーザーが全部を直接動かすのではなく、役割ごとに窓口と保存先を分けています。
+            左から右へ見ると、<strong>依頼 → 受付 / 通知 → AI処理 → 判断 / 記録 → 結果発生</strong> の順で役割が分かれます。
+          </p>
+
+          <div class="summary-grid">
+            <article class="role-block user">
+              <strong>ユーザー</strong>
+              <p>依頼、承認、結果確認など、最終判断に関わる行動だけを担当します。</p>
+            </article>
+            <article class="role-block ai">
+              <strong>Chatwork</strong>
+              <p>依頼受付、通知送信、承認依頼の窓口として機能します。</p>
+            </article>
+            <article class="role-block system">
+              <strong>System (AI)</strong>
+              <p>依頼解釈、分析、企画生成、返信案生成、実行、Notion 更新までを担います。</p>
+            </article>
+            <article class="role-block user">
+              <strong>Notion / Instagram</strong>
+              <p>Notion は判断と記録、Instagram はコメント・投稿・実績の発生源です。</p>
+            </article>
+          </div>
+
+          <div class="caption-box" style="margin-top: 24px;">
+            <strong>この図の見方</strong>
+            <p>横方向は受け渡し、縦方向は各レイヤーの担当業務です。<strong>どこで何が起きるか</strong>を、冒頭で一枚で把握できるようにしています。</p>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 920 560" role="img" aria-labelledby="structure-title structure-desc">
+              <title id="structure-title">全体構成図</title>
+              <desc id="structure-desc">ユーザー、Chatwork、System、Notion、Instagram の5レイヤーで全体構成を示す図</desc>
+
+              <line class="lane-divider" x1="170" y1="84" x2="170" y2="506"></line>
+              <line class="lane-divider" x1="350" y1="84" x2="350" y2="506"></line>
+              <line class="lane-divider" x1="580" y1="84" x2="580" y2="506"></line>
+              <line class="lane-divider" x1="760" y1="84" x2="760" y2="506"></line>
+              <line class="lane-base" x1="20" y1="520" x2="900" y2="520"></line>
+
+              <text class="lane-heading" x="90" y="58">ユーザー</text>
+              <text class="lane-heading" x="260" y="58">CHATWORK</text>
+              <text class="lane-heading" x="470" y="58">SYSTEM (AI)</text>
+              <text class="lane-heading" x="670" y="58">NOTION</text>
+              <text class="lane-heading" x="850" y="58">INSTAGRAM</text>
+
+              <rect class="lane-card user" x="30" y="110" width="120" height="50"></rect>
+              <text class="lane-card-text" x="90" y="135">Chatworkで依頼</text>
+              <rect class="lane-card user" x="30" y="176" width="120" height="50"></rect>
+              <text class="lane-card-text" x="90" y="201">Notionで投稿判断</text>
+              <rect class="lane-card user" x="30" y="242" width="120" height="50"></rect>
+              <text class="lane-card-text" x="90" y="267">Chatworkで返信承認</text>
+              <rect class="lane-card user" x="30" y="308" width="120" height="50"></rect>
+              <text class="lane-card-text" x="90" y="333">Notionで実績確認</text>
+
+              <rect class="lane-card chatwork" x="200" y="110" width="120" height="50"></rect>
+              <text class="lane-card-text" x="260" y="135">依頼受付</text>
+              <rect class="lane-card chatwork" x="200" y="176" width="120" height="50"></rect>
+              <text class="lane-card-text" x="260" y="201">通知送信</text>
+              <rect class="lane-card chatwork" x="200" y="242" width="120" height="50"></rect>
+              <text class="lane-card-text" x="260" y="267">承認依頼</text>
+
+              <rect class="lane-card ai" x="390" y="110" width="160" height="44"></rect>
+              <text class="lane-card-text" x="470" y="132">依頼解釈</text>
+              <rect class="lane-card ai" x="390" y="168" width="160" height="44"></rect>
+              <text class="lane-card-text" x="470" y="190">分析 / 競合調査</text>
+              <rect class="lane-card ai" x="390" y="226" width="160" height="44"></rect>
+              <text class="lane-card-text" x="470" y="248">企画生成</text>
+              <rect class="lane-card ai" x="390" y="284" width="160" height="44"></rect>
+              <text class="lane-card-text" x="470" y="306">投稿候補生成</text>
+              <rect class="lane-card ai" x="390" y="342" width="160" height="44"></rect>
+              <text class="lane-card-text" x="470" y="364">返信案生成</text>
+              <rect class="lane-card ai" x="390" y="400" width="160" height="44"></rect>
+              <text class="lane-card-text" x="470" y="422">投稿 / 返信実行</text>
+              <rect class="lane-card ai" x="390" y="458" width="160" height="44"></rect>
+              <text class="lane-card-text" x="470" y="480">Notion更新</text>
+
+              <rect class="lane-card notion" x="610" y="110" width="120" height="50"></rect>
+              <text class="lane-card-text" x="670" y="135">投稿候補DB</text>
+              <rect class="lane-card notion" x="610" y="176" width="120" height="50"></rect>
+              <text class="lane-card-text" x="670" y="201">投稿準備DB</text>
+              <rect class="lane-card notion" x="610" y="242" width="120" height="50"></rect>
+              <text class="lane-card-text" x="670" y="267">問い合わせDB</text>
+              <rect class="lane-card notion" x="610" y="308" width="120" height="50"></rect>
+              <text class="lane-card-text sm" x="670" y="333">投稿実績 / 振り返り</text>
+              <rect class="lane-card notion" x="610" y="374" width="120" height="50"></rect>
+              <text class="lane-card-text sm" x="670" y="399">設定 / 権限 / ルール</text>
+
+              <rect class="lane-card instagram" x="790" y="110" width="120" height="50"></rect>
+              <text class="lane-card-text" x="850" y="135">コメント / DM</text>
+              <rect class="lane-card instagram" x="790" y="176" width="120" height="50"></rect>
+              <text class="lane-card-text" x="850" y="201">投稿公開</text>
+              <rect class="lane-card instagram" x="790" y="242" width="120" height="50"></rect>
+              <text class="lane-card-text" x="850" y="267">投稿実績</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-3" data-index="03">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">機能全体</div>
+          <h2>主な機能は、この6ブロックです</h2>
+          <p class="lead">
+            このシステムは単なる「投稿作成ツール」ではありません。<strong>投稿づくり、返信、分析、設定、承認、運用管理</strong> が、
+            ひとつの流れとしてつながるように設計されています。
+          </p>
+
+          <div class="summary-grid">
+            <article class="role-block user">
+              <strong>企画・制作</strong>
+              <p>ブレスト、企画化、投稿候補生成、投稿準備、投稿実行までをつなぎます。</p>
+            </article>
+            <article class="role-block ai">
+              <strong>受信・返信</strong>
+              <p>コメントやDMを拾い、自動返信か人確認かを分け、履歴まで残します。</p>
+            </article>
+            <article class="role-block system">
+              <strong>分析・改善</strong>
+              <p>実績比較、競合観測、振り返り、次にやる施策までを管理します。</p>
+            </article>
+            <article class="role-block ai">
+              <strong>Notion運用</strong>
+              <p>ダッシュボード、承認、状態管理、履歴保存の中心になります。</p>
+            </article>
+            <article class="role-block system">
+              <strong>通知・対話</strong>
+              <p>依頼、補足、承認依頼、完了連絡の入口として Chatwork を使います。</p>
+            </article>
+            <article class="role-block user">
+              <strong>設定・メンバー</strong>
+              <p>案件目的、メンバー、人格、返信ルールが AI の動き方を決めます。</p>
+            </article>
+          </div>
+
+          <div class="caption-box" style="margin-top: 22px;">
+            <strong>このあと詳しく見る領域</strong>
+            <p><strong>Notionの操作盤</strong>、<strong>案件設定・人格・自動返信ルール</strong>、<strong>システム内部の定期処理</strong> まで含めて、後半で詳細を分解します。</p>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 760 560" role="img" aria-labelledby="map-title map-desc">
+              <title id="map-title">機能マップ</title>
+              <desc id="map-desc">主要機能を6つに整理したマップ</desc>
+
+              <path class="route sky" d="M260 150 C 286 170, 296 194, 314 228"></path>
+              <path class="route gold" d="M378 128 V 228"></path>
+              <path class="route coral" d="M500 150 C 474 170, 462 194, 442 228"></path>
+              <path class="route teal" d="M266 390 C 294 370, 304 346, 316 336"></path>
+              <path class="route subtle gold" d="M488 390 C 462 370, 450 346, 440 336"></path>
+
+              <g>
+                <rect class="node notion" x="300" y="228" width="156" height="108"></rect>
+                <text class="node-text" x="378" y="266">Notion運用</text>
+                <text class="node-note" x="378" y="294">承認 / 状態管理 / 履歴</text>
+              </g>
+
+              <rect class="node ai" x="96" y="104" width="164" height="92"></rect>
+              <text class="node-text" x="178" y="140">企画・制作</text>
+              <text class="node-note" x="178" y="168">ブレスト / 投稿候補 / 投稿準備</text>
+
+              <rect class="node system" x="500" y="104" width="164" height="92"></rect>
+              <text class="node-text" x="582" y="140">受信・返信</text>
+              <text class="node-note" x="582" y="168">自動返信 / 人確認 / ログ</text>
+
+              <rect class="node user" x="90" y="344" width="176" height="92"></rect>
+              <text class="node-text" x="178" y="380">分析・改善</text>
+              <text class="node-note" x="178" y="408">実績 / 競合 / 振り返り / 施策</text>
+
+              <rect class="node chatwork" x="488" y="344" width="188" height="92"></rect>
+              <text class="node-text" x="582" y="380">通知・対話</text>
+              <text class="node-note" x="582" y="408">依頼 / 連絡 / 承認依頼の入口</text>
+
+              <rect class="node ai" x="284" y="60" width="188" height="68"></rect>
+              <text class="node-text" x="378" y="94" style="font-size:17px;">設定・メンバー・人格・ルール</text>
+
+              <rect class="label-chip" x="282" y="468" width="192" height="28"></rect>
+              <text class="chip-text" x="378" y="482">6機能がつながる</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-4" data-index="04">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">投稿フロー</div>
+          <h2>投稿ができるまでの流れ</h2>
+          <p class="lead">
+            投稿作成は、<strong>いきなり完成品を人が作る方式</strong>ではありません。
+            AI がたたき台を出し、人は Notion 上で比較して採用し、投稿日時だけを決める設計です。
+          </p>
+
+          <div class="stack" style="margin-top: 24px;">
+            <div class="caption-box">
+              <strong>ユーザーの体感</strong>
+              <p>「依頼する → 候補を見る → 採用する → 投稿日時を決める」というシンプルな流れです。</p>
+            </div>
+            <div class="caption-box">
+              <strong>裏側で起きていること</strong>
+              <p>AI が企画、画像案、キャプション、CTA、ハッシュタグを作り、System が採用済み候補だけを投稿準備へ送ります。</p>
+            </div>
+          </div>
+
+          <div class="slide-footer">
+            <div class="summary-pill">Chatwork は依頼の入口</div>
+            <div class="summary-pill">Notion は候補比較と採用判断</div>
+            <div class="summary-pill">System は承認後だけ投稿実行</div>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 760 560" role="img" aria-labelledby="post-title post-desc">
+              <title id="post-title">投稿フロー</title>
+              <desc id="post-desc">依頼から投稿実行までのフローチャート</desc>
+
+              <g class="grid-lines">
+                <line x1="64" y1="132" x2="696" y2="132"></line>
+                <line x1="64" y1="260" x2="696" y2="260"></line>
+                <line x1="64" y1="388" x2="696" y2="388"></line>
+              </g>
+
+              <rect class="label-chip" x="62" y="84" width="144" height="28"></rect>
+              <text class="chip-text" x="134" y="98">1 依頼</text>
+              <rect class="label-chip" x="228" y="84" width="144" height="28"></rect>
+              <text class="chip-text" x="300" y="98">2 作成</text>
+              <rect class="label-chip" x="394" y="84" width="144" height="28"></rect>
+              <text class="chip-text" x="466" y="98">3 承認</text>
+              <rect class="label-chip" x="560" y="84" width="144" height="28"></rect>
+              <text class="chip-text" x="632" y="98">4 投稿</text>
+
+              <path class="route sky" d="M94 196 H 202"></path>
+              <path class="route teal" d="M258 196 H 368"></path>
+              <path class="route gold" d="M426 196 H 536"></path>
+              <path class="route coral" d="M592 196 H 680"></path>
+              <path class="route subtle gold" d="M480 228 C 480 310, 318 310, 318 372"></path>
+              <path class="route subtle teal" d="M318 372 C 318 442, 640 442, 640 372"></path>
+
+              <rect class="node chatwork" x="62" y="148" width="140" height="96"></rect>
+              <text class="node-text" x="132" y="184">Chatworkで</text>
+              <text class="node-text" x="132" y="210">投稿依頼</text>
+
+              <rect class="node ai" x="228" y="136" width="148" height="120"></rect>
+              <text class="node-text" x="302" y="176">AIが企画化</text>
+              <text class="node-note" x="302" y="204">画像案 / 文案 / CTA</text>
+              <text class="node-note" x="302" y="226">ハッシュタグまで作成</text>
+
+              <rect class="node notion" x="394" y="136" width="148" height="120"></rect>
+              <text class="node-text" x="468" y="176">Notionで</text>
+              <text class="node-text" x="468" y="202">採用判断</text>
+              <text class="node-note" x="468" y="228">採用 / 修正 / 再生成</text>
+
+              <rect class="node instagram" x="560" y="148" width="146" height="96"></rect>
+              <text class="node-text" x="633" y="184">Instagramへ</text>
+              <text class="node-text" x="633" y="210">投稿実行</text>
+
+              <rect class="node notion" x="244" y="338" width="148" height="96"></rect>
+              <text class="node-text" x="318" y="374">投稿準備DB</text>
+              <text class="node-note" x="318" y="402">日時と最終可否を設定</text>
+
+              <rect class="node notion" x="566" y="338" width="148" height="96"></rect>
+              <text class="node-text" x="640" y="374">実績を記録</text>
+              <text class="node-note" x="640" y="402">次の分析へ接続</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-5" data-index="05">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">返信フロー</div>
+          <h2>問い合わせ対応は、危険度で分岐します</h2>
+          <p class="lead">
+            コメントやDMは、全部を自動化するのではなく、<strong>安全なものだけ自動返信</strong>し、
+            複雑なもの・危険なものは人確認へ送る設計です。
+          </p>
+
+          <div class="mini-grid">
+            <article class="mini-card">
+              <strong>自動で返せるもの</strong>
+              <p>定型的な質問、資料送付、ルールに合う案内などは System がそのまま返します。</p>
+            </article>
+            <article class="mini-card">
+              <strong>人確認に回すもの</strong>
+              <p>クレーム、意図が複雑な相談、判断ミスのリスクが高いものは AI が下書きだけ作ります。</p>
+            </article>
+          </div>
+
+          <div class="caption-box" style="margin-top: 24px;">
+            <strong>承認の考え方</strong>
+            <p>Chatwork は「承認依頼が来た」と気づく入口です。実際に承認済みに変えるのは Notion 側です。</p>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 760 560" role="img" aria-labelledby="reply-title reply-desc">
+              <title id="reply-title">問い合わせフロー</title>
+              <desc id="reply-desc">問い合わせが自動返信か人確認かに分岐する図</desc>
+
+              <path class="route sky" d="M98 166 H 248"></path>
+              <path class="route teal" d="M316 166 C 410 166, 410 110, 504 110"></path>
+              <path class="route gold" d="M316 166 C 410 166, 410 312, 504 312"></path>
+              <path class="route coral" d="M572 110 H 676"></path>
+              <path class="route subtle gold" d="M572 312 H 640"></path>
+              <path class="route subtle coral" d="M640 312 C 640 396, 402 396, 402 466"></path>
+
+              <rect class="node instagram" x="48" y="120" width="160" height="92"></rect>
+              <text class="node-text" x="128" y="156">Instagramで</text>
+              <text class="node-text" x="128" y="182">問い合わせ発生</text>
+
+              <rect class="node ai" x="248" y="110" width="132" height="112"></rect>
+              <text class="node-text" x="314" y="148">AIが分類</text>
+              <text class="node-note" x="314" y="176">内容理解 / リスク判定</text>
+
+              <rect class="node ai" x="472" y="56" width="132" height="108"></rect>
+              <text class="node-text" x="538" y="92">自動ルート</text>
+              <text class="node-note" x="538" y="120">そのまま返信可能</text>
+
+              <rect class="node notion" x="472" y="260" width="132" height="108"></rect>
+              <text class="node-text" x="538" y="296">確認ルート</text>
+              <text class="node-note" x="538" y="324">Notionで承認待ち</text>
+
+              <rect class="node system" x="624" y="70" width="90" height="84" rx="24" ry="24"></rect>
+              <text class="node-text" x="669" y="104" style="font-size:16px;">返信実行</text>
+
+              <rect class="node chatwork" x="612" y="272" width="112" height="84"></rect>
+              <text class="node-text" x="668" y="306" style="font-size:16px;">Chatworkで</text>
+              <text class="node-text" x="668" y="329" style="font-size:16px;">通知</text>
+
+              <rect class="node notion" x="322" y="420" width="160" height="88"></rect>
+              <text class="node-text" x="402" y="455">ログと履歴を保存</text>
+              <text class="node-note" x="402" y="482">あとから追える状態にする</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-6" data-index="06">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">Notion構造</div>
+          <h2>Notion は、案件トップ配下に6つの運用ブロックがあります</h2>
+          <p class="lead">
+            このツールの Notion は、
+            案件トップの下に <strong>5つの運用ページと 90 DB実体</strong> が並ぶ構造です。
+            日々触る画面と、裏側のデータ本体を分けて管理します。
+          </p>
+
+          <div class="mini-grid" style="margin-top: 18px;">
+            <article class="mini-card">
+              <strong>00 指令ダッシュボード</strong>
+              <p>承認待ち、要確認、今週予定をまとめて見る入口です。</p>
+            </article>
+            <article class="mini-card">
+              <strong>01 受信・承認</strong>
+              <p>問い合わせ確認と返信承認を行う画面です。</p>
+            </article>
+            <article class="mini-card">
+              <strong>02 企画・制作</strong>
+              <p>投稿候補の比較、採用、投稿準備の中心です。</p>
+            </article>
+            <article class="mini-card">
+              <strong>03 分析・改善</strong>
+              <p>実績確認、振り返り、次施策の検討を行います。</p>
+            </article>
+            <article class="mini-card">
+              <strong>04 ルール・運用</strong>
+              <p>案件設定、メンバー、人格、返信ルールを見直します。</p>
+            </article>
+            <article class="mini-card">
+              <strong>90 DB実体</strong>
+              <p>案件ごとの DB 本体を置く保存層です。System はここを読んで処理を進めます。</p>
+            </article>
+          </div>
+
+          <div class="caption-box" style="margin-top: 16px;">
+            <strong>重要</strong>
+            <p>人が普段触るのは 00〜04 の運用ページです。90 DB実体 は 21 DB を抱える保存層で、<strong>画面とデータ本体を分離</strong>しています。</p>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 760 560" role="img" aria-labelledby="notion-title notion-desc">
+              <title id="notion-title">Notionページ構造</title>
+              <desc id="notion-desc">このツールの案件トップ配下にあるページ構造</desc>
+
+              <path class="route sky" d="M210 132 H 248"></path>
+              <path class="route gold" d="M486 150 H 548"></path>
+              <path class="route gold subtle" d="M486 266 H 548"></path>
+              <path class="route gold subtle" d="M486 382 H 548"></path>
+
+              <rect class="node notion" x="236" y="54" width="250" height="454"></rect>
+              <text class="node-text" x="361" y="92">案件トップ</text>
+              <text class="node-note" x="361" y="120">このツールの運用ページ群</text>
+
+              <rect class="node notion" x="264" y="146" width="194" height="58"></rect>
+              <text class="node-text" x="361" y="170" style="font-size:15px;">00 指令ダッシュボード</text>
+              <text class="node-note" x="361" y="192" style="font-size:11.5px;">全体の入口</text>
+
+              <rect class="node notion" x="264" y="212" width="194" height="58"></rect>
+              <text class="node-text" x="361" y="236" style="font-size:15px;">01 受信・承認</text>
+              <text class="node-note" x="361" y="258" style="font-size:11.5px;">受信と返信承認</text>
+
+              <rect class="node notion" x="264" y="278" width="194" height="58"></rect>
+              <text class="node-text" x="361" y="302" style="font-size:15px;">02 企画・制作</text>
+              <text class="node-note" x="361" y="324" style="font-size:11.5px;">投稿候補と準備</text>
+
+              <rect class="node notion" x="264" y="344" width="194" height="58"></rect>
+              <text class="node-text" x="361" y="368" style="font-size:15px;">03 分析・改善</text>
+              <text class="node-note" x="361" y="390" style="font-size:11.5px;">実績と改善</text>
+
+              <rect class="node notion" x="264" y="410" width="194" height="58"></rect>
+              <text class="node-text" x="361" y="434" style="font-size:15px;">04 ルール・運用</text>
+              <text class="node-note" x="361" y="456" style="font-size:11.5px;">設定と運用ルール</text>
+
+              <rect class="node chatwork" x="54" y="92" width="156" height="80"></rect>
+              <text class="node-text" x="132" y="126" style="font-size:16px;">Chatwork通知</text>
+              <text class="node-note" x="132" y="150">入口として使う</text>
+
+              <rect class="node notion" x="548" y="106" width="160" height="88"></rect>
+              <text class="node-text" x="628" y="140" style="font-size:16px;">90 DB実体</text>
+              <text class="node-note" x="628" y="164">21 DB に分かれた保存層</text>
+
+              <rect class="node system" x="548" y="222" width="160" height="88"></rect>
+              <text class="node-text" x="628" y="256" style="font-size:16px;">状態変化を読む</text>
+              <text class="node-note" x="628" y="280">System が次の処理へ進める</text>
+
+              <rect class="node ai" x="548" y="338" width="160" height="88"></rect>
+              <text class="node-text" x="628" y="372" style="font-size:16px;">結果を書き戻す</text>
+              <text class="node-note" x="628" y="396">履歴と見える化を維持</text>
+
+              <rect class="label-chip" x="256" y="20" width="210" height="28"></rect>
+              <text class="chip-text" x="361" y="34">このツールのページ構造</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-7" data-index="07">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">内部処理</div>
+          <h2>システムの中では、何が起きているのか</h2>
+          <p class="lead">
+            現在の設計は、常に全部をリアルタイムで待ち受ける方式ではなく、
+            <strong>定期的に状況を見に行き、承認条件がそろったものだけ進める安全寄りの運用</strong>が中心です。
+            つまり、勝手に全部を動かすのではなく、Notion の状態や Instagram の反応を拾い、AI が判断材料を作り、System が必要な処理だけ進めます。
+          </p>
+
+          <div class="day-grid">
+            <article class="day-card">
+              <b>1</b>
+              <strong>情報を取りに行く</strong>
+              <p>Instagram の反応、Notion の承認状態、設定情報を定期的に読み込みます。</p>
+            </article>
+            <article class="day-card">
+              <b>2</b>
+              <strong>AIが判断材料を作る</strong>
+              <p>人格、ルール、過去データを参照しながら、下書き作成やリスク判定を行います。</p>
+            </article>
+            <article class="day-card">
+              <b>3</b>
+              <strong>条件がそろえば動く</strong>
+              <p>承認済みのものだけ投稿や返信を実行し、結果を Notion に戻します。</p>
+            </article>
+          </div>
+
+          <div class="slide-footer">
+            <div class="summary-pill">人が決める場所は Notion</div>
+            <div class="summary-pill">自動で進む場所は AI / System</div>
+            <div class="summary-pill">結果は Notion と通知へ戻る</div>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 760 560" role="img" aria-labelledby="inside-title inside-desc">
+              <title id="inside-title">内部処理フロー</title>
+              <desc id="inside-desc">システム内部で定期処理とAI判断が行われる流れ</desc>
+
+              <path class="route sky" d="M186 120 H 220"></path>
+              <path class="route teal" d="M380 120 H 410"></path>
+              <path class="route gold" d="M570 120 H 596"></path>
+              <path class="route coral" d="M659 166 C 659 186, 650 198, 645 216"></path>
+              <path class="route subtle gold" d="M568 258 C 568 338, 500 352, 462 404"></path>
+              <path class="route subtle teal" d="M382 450 H 276"></path>
+              <path class="route subtle sky" d="M196 404 C 196 320, 112 306, 112 166"></path>
+
+              <rect class="node system" x="38" y="74" width="148" height="92"></rect>
+              <text class="node-text" x="112" y="110">定期チェック</text>
+              <text class="node-note" x="112" y="136">コメント監視 / 状態同期</text>
+
+              <rect class="node ai" x="220" y="64" width="160" height="112"></rect>
+              <text class="node-text" x="300" y="102">AIが材料を作る</text>
+              <text class="node-note" x="300" y="130">分析 / 下書き / リスク判定</text>
+
+              <rect class="node notion" x="410" y="64" width="160" height="112"></rect>
+              <text class="node-text" x="490" y="102">承認状態を確認</text>
+              <text class="node-note" x="490" y="130">承認済みか / 保留か</text>
+
+              <rect class="node instagram" x="596" y="74" width="126" height="92"></rect>
+              <text class="node-text" x="659" y="110">Instagram</text>
+              <text class="node-note" x="659" y="136">投稿 / 返信 / 実績</text>
+
+              <rect class="node system" x="568" y="216" width="154" height="84"></rect>
+              <text class="node-text" x="645" y="250">実行後を記録</text>
+              <text class="node-note" x="645" y="276">ログ / 実績 / 状態更新</text>
+
+              <rect class="node ai" x="382" y="404" width="160" height="92"></rect>
+              <text class="node-text" x="462" y="440">改善の学習材料</text>
+              <text class="node-note" x="462" y="466">次の企画と返信へ反映</text>
+
+              <rect class="node notion" x="116" y="404" width="160" height="92"></rect>
+              <text class="node-text" x="196" y="440">ダッシュボードで</text>
+              <text class="node-note" x="196" y="466">人が確認しやすくなる</text>
+
+              <rect class="label-chip" x="234" y="22" width="288" height="28"></rect>
+              <text class="chip-text" x="378" y="36">勝手に全部進めず、承認条件で動く</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-8" data-index="08">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">分析と改善</div>
+          <h2>分析機能は、記録ではなく改善のためにあります</h2>
+          <p class="lead">
+            投稿したら終わりではありません。<strong>何が伸びたか、なぜ伸びたか、次に何を試すか</strong>までを、
+            Notion 上で見える形にして、次の企画や返信の精度を上げていきます。
+          </p>
+
+          <div class="mini-grid">
+            <article class="mini-card">
+              <strong>見るもの</strong>
+              <p>KPI日次スナップショットDB、投稿実績DB、投稿管理DBで数字と公開結果を確認します。</p>
+            </article>
+            <article class="mini-card">
+              <strong>まとめるもの</strong>
+              <p>振り返りDBで学びを言語化し、施策DBと Action Queue DB で次アクションに落とします。</p>
+            </article>
+            <article class="mini-card">
+              <strong>ユーザーの使い方</strong>
+              <p>03 分析・改善の画面で結果を見て、次回の投稿方針や優先順位を決めます。</p>
+            </article>
+            <article class="mini-card">
+              <strong>AIの役割</strong>
+              <p>比較しやすい形に数字を整理し、好調要因や改善案を文章化して次の企画へ渡します。</p>
+            </article>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 760 560" role="img" aria-labelledby="analysis-title analysis-desc">
+              <title id="analysis-title">分析と改善の流れ</title>
+              <desc id="analysis-desc">投稿から実績、学び、施策へつながるループ図</desc>
+
+              <path class="route coral" d="M96 166 H 222"></path>
+              <path class="route sky" d="M272 166 H 414"></path>
+              <path class="route gold" d="M464 166 H 608"></path>
+              <path class="route subtle teal" d="M650 196 C 650 340, 470 340, 470 430"></path>
+              <path class="route subtle gold" d="M470 430 C 470 488, 246 488, 246 430"></path>
+              <path class="route subtle sky" d="M246 430 C 246 340, 96 340, 96 234"></path>
+
+              <rect class="node instagram" x="48" y="120" width="160" height="92"></rect>
+              <text class="node-text" x="128" y="156">投稿・返信の</text>
+              <text class="node-text" x="128" y="182">結果が出る</text>
+
+              <rect class="node notion" x="222" y="108" width="176" height="116"></rect>
+              <text class="node-text" x="310" y="146">実績DBに記録</text>
+              <text class="node-note" x="310" y="174">KPI日次 / 投稿実績 / 投稿管理</text>
+              <text class="node-note" x="310" y="196">分析の母艦になる保存先</text>
+
+              <rect class="node ai" x="414" y="108" width="176" height="116"></rect>
+              <text class="node-text" x="502" y="146">AIが比較分析</text>
+              <text class="node-note" x="502" y="174">好調要因 / 低調要因 /</text>
+              <text class="node-note" x="502" y="196">再現ポイントを整理</text>
+
+              <rect class="node user" x="606" y="120" width="106" height="92"></rect>
+              <text class="node-text" x="659" y="156" style="font-size:17px;">判断する</text>
+              <text class="node-note" x="659" y="182">次に何を試すか</text>
+
+              <rect class="node notion" x="382" y="386" width="176" height="92"></rect>
+              <text class="node-text" x="470" y="422">施策とタスクへ落とす</text>
+              <text class="node-note" x="470" y="448">施策DB / Action Queue DB</text>
+
+              <rect class="node ai" x="158" y="386" width="176" height="92"></rect>
+              <text class="node-text" x="246" y="422">次の企画へ反映</text>
+              <text class="node-note" x="246" y="448">改善ループが回り続ける</text>
+
+              <rect class="label-chip" x="292" y="44" width="176" height="28"></rect>
+              <text class="chip-text" x="380" y="58">記録から改善へ</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-9" data-index="09">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">設定とガードレール</div>
+          <h2>設定・メンバー・人格が、AIの動き方を決めます</h2>
+          <p class="lead">
+            AI は毎回ゼロから考えているわけではありません。<strong>案件ごとの目的、メンバー情報、人格、返信ルール</strong>を参照しながら、
+            「どんな言い方をするか」「どこまで自動で進めていいか」を決めています。
+          </p>
+
+          <div class="stack" style="margin-top: 24px;">
+            <div class="caption-box">
+              <strong>人格・トーン</strong>
+              <p>ブランドらしい話し方、NG表現、基本姿勢をAIに渡します。</p>
+            </div>
+            <div class="caption-box">
+              <strong>自動返信ルール</strong>
+              <p>どのイベントに、どの条件で、どの返信を返すかを定義します。</p>
+            </div>
+            <div class="caption-box">
+              <strong>メンバーと承認担当</strong>
+              <p>案件メンバーDBで、誰が判断役か、誰に通知するかを整理します。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 760 560" role="img" aria-labelledby="setting-title setting-desc">
+              <title id="setting-title">設定とガバナンス</title>
+              <desc id="setting-desc">設定情報がAIの判断に使われる流れ</desc>
+
+              <path class="route sky" d="M106 130 H 258"></path>
+              <path class="route teal" d="M106 250 H 258"></path>
+              <path class="route gold" d="M106 370 H 258"></path>
+              <path class="route coral" d="M430 250 H 620"></path>
+              <path class="route subtle gold" d="M650 280 V 396"></path>
+
+              <rect class="node notion" x="40" y="86" width="176" height="88"></rect>
+              <text class="node-text" x="128" y="122">案件設定DB</text>
+              <text class="node-note" x="128" y="148">目的 / KPI / 稼働状態</text>
+
+              <rect class="node notion" x="40" y="206" width="176" height="88"></rect>
+              <text class="node-text" x="128" y="242">人格DB・ルールDB</text>
+              <text class="node-note" x="128" y="268">話し方 / NG表現 / 返信条件</text>
+
+              <rect class="node notion" x="40" y="326" width="176" height="88"></rect>
+              <text class="node-text" x="128" y="362">案件メンバーDB</text>
+              <text class="node-note" x="128" y="388">判断役 / 通知先 / 連絡先</text>
+
+              <rect class="node ai" x="258" y="178" width="172" height="144"></rect>
+              <text class="node-text" x="344" y="220">AI / System が参照</text>
+              <text class="node-note" x="344" y="248">返答トーン / 提案内容 /</text>
+              <text class="node-note" x="344" y="270">自動化の可否 / 通知先</text>
+
+              <rect class="node system" x="620" y="204" width="100" height="92"></rect>
+              <text class="node-text" x="670" y="240" style="font-size:17px;">安全に</text>
+              <text class="node-text" x="670" y="264" style="font-size:17px;">実行</text>
+
+              <rect class="node notion" x="586" y="396" width="134" height="88"></rect>
+              <text class="node-text" x="653" y="432" style="font-size:17px;">監査しやすい</text>
+              <text class="node-note" x="653" y="458">あとから理由を追える</text>
+
+              <rect class="label-chip" x="274" y="88" width="140" height="28"></rect>
+              <text class="chip-text" x="344" y="102">判断の前提条件</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-10" data-index="10">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">日々の使い方</div>
+          <h2>ユーザーが毎日やることは、3つだけです</h2>
+          <p class="lead">
+            全体は大きく見えても、日々の運用で人がやることは多くありません。
+            基本は <strong>Chatworkで気づく</strong>、<strong>Notionで決める</strong>、<strong>結果を見る</strong> の3段階です。
+            人は全部を手で処理するのではなく、<strong>通知に気づき、判断し、改善方針を決める役</strong>に集中します。
+          </p>
+
+          <div class="day-grid">
+            <article class="day-card">
+              <b>朝</b>
+              <strong>通知を見る</strong>
+              <p>Chatwork と 00 指令ダッシュボードで、投稿候補や要確認案件の有無を確認します。</p>
+            </article>
+            <article class="day-card">
+              <b>昼</b>
+              <strong>承認する</strong>
+              <p>01 受信・承認と 02 企画・制作で、採用・返信承認・日時設定を行います。</p>
+            </article>
+            <article class="day-card">
+              <b>夕</b>
+              <strong>結果を見る</strong>
+              <p>03 分析・改善で実績を見て、次に試す施策や優先順位を決めます。</p>
+            </article>
+          </div>
+
+          <div class="caption-box" style="margin-top: 24px;">
+            <strong>結論</strong>
+            <p><strong>AIが考える、Notionで人が決める、Systemが動かす。</strong> だから、人は例外対応と意思決定に集中できます。</p>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 760 560" role="img" aria-labelledby="day-title day-desc">
+              <title id="day-title">日常運用の流れ</title>
+              <desc id="day-desc">朝昼夕のユーザー動線</desc>
+
+              <path class="route sky" d="M136 278 H 322"></path>
+              <path class="route gold" d="M408 278 H 594"></path>
+
+              <rect class="node chatwork" x="54" y="210" width="164" height="136"></rect>
+              <text class="node-text" x="136" y="252">1. Chatworkで</text>
+              <text class="node-text" x="136" y="280">通知を確認</text>
+              <text class="node-note" x="136" y="310">依頼 / 要確認 / 完了連絡</text>
+
+              <rect class="node notion" x="298" y="196" width="164" height="164"></rect>
+              <text class="node-text" x="380" y="238">2. Notionで</text>
+              <text class="node-text" x="380" y="266">承認・設定</text>
+              <text class="node-note" x="380" y="294">採用 / 保留 / 再生成 /</text>
+              <text class="node-note" x="380" y="316">投稿日時 / 実行可否</text>
+
+              <rect class="node instagram" x="542" y="210" width="164" height="136"></rect>
+              <text class="node-text" x="624" y="252">3. 結果が出る</text>
+              <text class="node-text" x="624" y="280">また確認する</text>
+              <text class="node-note" x="624" y="310">投稿 / 返信 / 実績</text>
+
+              <path class="route subtle teal" d="M624 346 C 624 440, 380 470, 220 426"></path>
+              <rect class="label-chip" x="252" y="428" width="256" height="28"></rect>
+              <text class="chip-text" x="380" y="442">人の作業は 3 段階に集約する</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" id="slide-11" data-index="11">
+      <div class="slide-inner">
+        <div class="slide-card copy-panel">
+          <div class="eyebrow">DB役割マップ</div>
+          <h2>90 DB実体 は、裏側を支える 21 DB の保存層です</h2>
+          <p class="lead">
+            「Notionに全部ある」と見えても、毎日触る画面とデータ本体は分かれています。
+            このツールでは、<strong>90 DB実体 は操作画面ではなく、用途別に分かれた保存層</strong>として整理できます。
+          </p>
+
+          <div class="summary-grid">
+            <article class="role-block user">
+              <strong>設定系DB</strong>
+              <p>案件設定DB、案件メンバーDB、人格DB、送付資料DB、自動返信ルールDB。</p>
+            </article>
+            <article class="role-block ai">
+              <strong>制作系DB</strong>
+              <p>ブレストDB、企画DB、旧_投稿候補DB、投稿候補DB、投稿準備DB、投稿カレンダーDB。</p>
+            </article>
+            <article class="role-block system">
+              <strong>受信系DB</strong>
+              <p>問い合わせDB、返信実行ログDB。コメントや DM の履歴と承認結果が残ります。</p>
+            </article>
+            <article class="role-block ai">
+              <strong>分析改善系DB</strong>
+              <p>投稿実績DB、振り返りDB、施策DB、KPI日次スナップショットDB。</p>
+            </article>
+            <article class="role-block system">
+              <strong>運用監視系DB</strong>
+              <p>Action Queue DB、ジョブヘルスDB、Webhook状態DB、投稿管理DB。</p>
+            </article>
+            <article class="role-block user">
+              <strong>日常で主に見るDB</strong>
+              <p>問い合わせDB、投稿候補DB、投稿準備DB、投稿実績DB。旧DBや監視系は必要時だけ確認します。</p>
+            </article>
+          </div>
+
+          <div class="caption-box" style="margin-top: 16px;">
+            <strong>見方のコツ</strong>
+            <p>00〜04 が日常の操作画面、90 DB実体 が保存層です。旧_投稿候補DB と新しい投稿候補DB が併存し、監視系DBは人が毎日開く主役ではなく裏側の運用確認向けです。</p>
+          </div>
+        </div>
+
+        <div class="slide-card visual-panel">
+          <div class="artboard">
+            <svg viewBox="0 0 760 560" role="img" aria-labelledby="db-title db-desc">
+              <title id="db-title">Notion DB役割マップ</title>
+              <desc id="db-desc">このツールのDBを役割別に整理した図</desc>
+
+              <path class="route sky subtle" d="M258 136 C 280 150, 294 174, 308 208"></path>
+              <path class="route teal subtle" d="M504 140 C 482 154, 468 176, 452 208"></path>
+              <path class="route gold subtle" d="M242 280 H 282"></path>
+              <path class="route coral subtle" d="M270 436 C 306 410, 324 382, 344 334"></path>
+              <path class="route gold subtle" d="M494 431 C 456 406, 438 380, 422 334"></path>
+
+              <rect class="node notion" x="282" y="208" width="196" height="126"></rect>
+              <text class="node-text" x="380" y="250">90 DB実体</text>
+              <text class="node-note" x="380" y="278">21 DB に分かれた保存層</text>
+              <text class="node-note" x="380" y="300">人が毎日触る画面ではない保存層</text>
+
+              <rect class="node notion" x="74" y="88" width="184" height="96"></rect>
+              <text class="node-text" x="166" y="124" style="font-size:17px;">設定系</text>
+              <text class="node-note" x="166" y="148">案件設定 / 案件メンバー / 人格 /</text>
+              <text class="node-note" x="166" y="170">送付資料 / 自動返信ルール</text>
+
+              <rect class="node ai" x="504" y="88" width="184" height="104"></rect>
+              <text class="node-text" x="596" y="124" style="font-size:17px;">制作系</text>
+              <text class="node-note" x="596" y="148">ブレスト / 企画 / 旧候補 / 新候補 /</text>
+              <text class="node-note" x="596" y="170">投稿準備 / 投稿カレンダー</text>
+
+              <rect class="node chatwork" x="54" y="236" width="188" height="88"></rect>
+              <text class="node-text" x="148" y="270" style="font-size:17px;">受信系</text>
+              <text class="node-note" x="148" y="294">問い合わせ / 返信実行ログ</text>
+
+              <rect class="node user" x="86" y="388" width="184" height="96"></rect>
+              <text class="node-text" x="178" y="424" style="font-size:17px;">分析改善系</text>
+              <text class="node-note" x="178" y="448">投稿実績 / 振り返り / 施策 /</text>
+              <text class="node-note" x="178" y="470">KPI日次スナップショット</text>
+
+              <rect class="node system" x="494" y="378" width="196" height="106"></rect>
+              <text class="node-text" x="592" y="414" style="font-size:17px;">運用監視系</text>
+              <text class="node-note" x="592" y="438">Action Queue / ジョブヘルス /</text>
+              <text class="node-note" x="592" y="460">Webhook状態 / 投稿管理</text>
+
+              <rect class="label-chip" x="252" y="38" width="256" height="28"></rect>
+              <text class="chip-text" x="380" y="52">このツールの保存層の分類</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const slides = [...document.querySelectorAll('.slide')];
+      const buttons = [...document.querySelectorAll('.rail button')];
+      const current = document.getElementById('page-current');
+
+      document.querySelectorAll('svg path.route').forEach((route) => {
+        const track = route.cloneNode(false);
+        track.setAttribute(
+          'class',
+          (route.getAttribute('class') || '').replace(/\broute\b/, 'route-track')
+        );
+        track.setAttribute('aria-hidden', 'true');
+        route.parentNode.insertBefore(track, route);
+      });
+
+      const setActive = (id) => {
+        slides.forEach((slide) => {
+          slide.classList.toggle('is-active', slide.id === id);
+        });
+
+        buttons.forEach((button) => {
+          button.classList.toggle('is-active', button.dataset.target === id);
+        });
+
+        const activeSlide = slides.find((slide) => slide.id === id);
+        if (activeSlide) {
+          current.textContent = activeSlide.dataset.index || '01';
+        }
+      };
+
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (visible) {
+          setActive(visible.target.id);
+        }
+      }, {
+        threshold: [0.35, 0.55, 0.75]
+      });
+
+      slides.forEach((slide) => observer.observe(slide));
+
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const target = document.getElementById(button.dataset.target);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+      });
+
+      window.addEventListener('keydown', (event) => {
+        if (event.altKey || event.ctrlKey || event.metaKey) {
+          return;
+        }
+
+        const activeIndex = slides.findIndex((slide) => slide.classList.contains('is-active'));
+        if (event.key === 'ArrowDown' || event.key === 'PageDown' || event.key === ' ') {
+          event.preventDefault();
+          const next = slides[Math.min(activeIndex + 1, slides.length - 1)] || slides[0];
+          next.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        if (event.key === 'ArrowUp' || event.key === 'PageUp') {
+          event.preventDefault();
+          const prev = slides[Math.max(activeIndex - 1, 0)] || slides[0];
+          prev.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, { passive: false });
+
+      setActive(slides[0].id);
+    })();
+  </script>
+</body>
+</html>
